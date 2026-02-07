@@ -1,0 +1,515 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  TRANSFERRED
+  WITHDRAWN
+  GRADUATED
+}
+
+enum GradeType {
+  DEVOIR
+  INTERROGATION
+  COMPOSITION
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  MTN_MOMO
+  ORANGE_MONEY
+  CASH
+}
+
+enum FeeType {
+  INSCRIPTION
+  SCOLARITE_TRANCHE_1
+  SCOLARITE_TRANCHE_2
+  SCOLARITE_TRANCHE_3
+  APEE
+  INFORMATIQUE
+  AUTRE
+}
+
+enum PreRegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+// ==================== AUTH & PROFILES ====================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  role          UserRole
+  isActive      Boolean   @default(true)
+  supabaseId    String    @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  student       Student?
+  teacher       Teacher?
+  parent        Parent?
+
+  @@map("users")
+}
+
+model Student {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  matricule     String    @unique
+  firstName     String
+  lastName      String
+  dateOfBirth   DateTime
+  gender        Gender
+  placeOfBirth  String
+  nationality   String    @default("Camerounaise")
+  address       String?
+  phone         String?
+  photoUrl      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollments   Enrollment[]
+  grades        Grade[]
+  bulletins     Bulletin[]
+  parents       ParentStudent[]
+  payments      Payment[]
+
+  @@map("students")
+}
+
+model Teacher {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  firstName     String
+  lastName      String
+  phone         String?
+  gender        Gender
+  specialty     String?
+  photoUrl      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments   TeacherAssignment[]
+  grades        Grade[]
+
+  @@map("teachers")
+}
+
+model Parent {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  firstName     String
+  lastName      String
+  phone         String
+  profession    String?
+  address       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  children      ParentStudent[]
+
+  @@map("parents")
+}
+
+model ParentStudent {
+  id            String    @id @default(uuid())
+  parentId      String
+  studentId     String
+  relationship  String    @default("Parent")
+
+  parent        Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+  @@map("parent_students")
+}
+
+// ==================== ACADEMIC STRUCTURE ====================
+
+model AcademicYear {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  startDate     DateTime
+  endDate       DateTime
+  isCurrent     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  terms         Term[]
+  enrollments   Enrollment[]
+  feeStructures FeeStructure[]
+  payments      Payment[]
+
+  @@map("academic_years")
+}
+
+model Term {
+  id              String    @id @default(uuid())
+  name            String
+  sequenceNumber  Int
+  startDate       DateTime
+  endDate         DateTime
+  academicYearId  String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  grades          Grade[]
+  bulletins       Bulletin[]
+
+  @@unique([academicYearId, sequenceNumber])
+  @@map("terms")
+}
+
+model Class {
+  id              String    @id @default(uuid())
+  name            String    @unique
+  level           String
+  section         String?
+  capacity        Int       @default(60)
+  classTeacherId  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  enrollments       Enrollment[]
+  classSubjects     ClassSubject[]
+  teacherAssignments TeacherAssignment[]
+  timetableSlots    TimetableSlot[]
+  announcements     Announcement[]
+
+  @@map("classes")
+}
+
+model Subject {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  code          String    @unique
+  category      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  classSubjects ClassSubject[]
+
+  @@map("subjects")
+}
+
+model ClassSubject {
+  id            String    @id @default(uuid())
+  classId       String
+  subjectId     String
+  coefficient   Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  class         Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject       Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherAssignments TeacherAssignment[]
+  grades        Grade[]
+  bulletinResults BulletinSubjectResult[]
+
+  @@unique([classId, subjectId])
+  @@map("class_subjects")
+}
+
+model TeacherAssignment {
+  id              String    @id @default(uuid())
+  teacherId       String
+  classId         String
+  classSubjectId  String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  teacher         Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  class           Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classSubject    ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, classSubjectId])
+  @@map("teacher_assignments")
+}
+
+// ==================== ENROLLMENT ====================
+
+model Enrollment {
+  id              String           @id @default(uuid())
+  studentId       String
+  classId         String
+  academicYearId  String
+  status          EnrollmentStatus @default(ACTIVE)
+  enrolledAt      DateTime         @default(now())
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class           Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, academicYearId])
+  @@map("enrollments")
+}
+
+// ==================== GRADES ====================
+
+model Grade {
+  id              String    @id @default(uuid())
+  studentId       String
+  classSubjectId  String
+  termId          String
+  teacherId       String
+  type            GradeType
+  value           Float
+  description     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classSubject    ClassSubject  @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+  term            Term          @relation(fields: [termId], references: [id], onDelete: Cascade)
+  teacher         Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("grades")
+}
+
+// ==================== BULLETINS ====================
+
+model Bulletin {
+  id                  String    @id @default(uuid())
+  studentId           String
+  termId              String
+  generalAverage      Float?
+  rank                Int?
+  totalStudents       Int?
+  classAverage        Float?
+  teacherComment      String?
+  principalComment    String?
+  decision            String?
+  pdfUrl              String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  student             Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  term                Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+  subjectResults      BulletinSubjectResult[]
+
+  @@unique([studentId, termId])
+  @@map("bulletins")
+}
+
+model BulletinSubjectResult {
+  id              String    @id @default(uuid())
+  bulletinId      String
+  classSubjectId  String
+  average         Float
+  coefficient     Int
+  total           Float
+  classAverage    Float?
+  classMin        Float?
+  classMax        Float?
+  appreciation    String?
+  teacherName     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bulletin        Bulletin     @relation(fields: [bulletinId], references: [id], onDelete: Cascade)
+  classSubject    ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([bulletinId, classSubjectId])
+  @@map("bulletin_subject_results")
+}
+
+// ==================== FINANCES ====================
+
+model FeeStructure {
+  id              String    @id @default(uuid())
+  academicYearId  String
+  level           String
+  feeType         FeeType
+  amount          Int
+  description     String?
+  dueDate         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([academicYearId, level, feeType])
+  @@map("fee_structures")
+}
+
+model Payment {
+  id                 String        @id @default(uuid())
+  studentId          String
+  academicYearId     String
+  feeType            FeeType
+  amount             Int
+  status             PaymentStatus @default(PENDING)
+  method             PaymentMethod?
+  cinetpayTransId    String?       @unique
+  cinetpayPaymentUrl String?
+  cinetpayData       Json?
+  paidAt             DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  student            Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear       AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// ==================== TIMETABLE ====================
+
+model TimetableSlot {
+  id            String    @id @default(uuid())
+  classId       String
+  subjectName   String
+  teacherName   String
+  dayOfWeek     DayOfWeek
+  startTime     String
+  endTime       String
+  room          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  class         Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@map("timetable_slots")
+}
+
+// ==================== CONTENT ====================
+
+model Announcement {
+  id            String    @id @default(uuid())
+  title         String
+  content       String
+  targetRole    UserRole?
+  targetClassId String?
+  isPublished   Boolean   @default(true)
+  publishedAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  targetClass   Class?    @relation(fields: [targetClassId], references: [id], onDelete: SetNull)
+
+  @@map("announcements")
+}
+
+model Event {
+  id            String    @id @default(uuid())
+  title         String
+  description   String
+  date          DateTime
+  endDate       DateTime?
+  location      String?
+  imageUrl      String?
+  isPublished   Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("events")
+}
+
+model NewsArticle {
+  id            String    @id @default(uuid())
+  title         String
+  slug          String    @unique
+  content       String
+  excerpt       String?
+  imageUrl      String?
+  isPublished   Boolean   @default(true)
+  publishedAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("news_articles")
+}
+
+model GalleryAlbum {
+  id            String    @id @default(uuid())
+  title         String
+  description   String?
+  coverUrl      String?
+  isPublished   Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  photos        GalleryPhoto[]
+
+  @@map("gallery_albums")
+}
+
+model GalleryPhoto {
+  id            String    @id @default(uuid())
+  albumId       String
+  url           String
+  caption       String?
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  album         GalleryAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@map("gallery_photos")
+}
+
+// ==================== PRE-REGISTRATION ====================
+
+model PreRegistration {
+  id              String                @id @default(uuid())
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime
+  gender          Gender
+  placeOfBirth    String
+  previousSchool  String?
+  desiredLevel    String
+  parentName      String
+  parentPhone     String
+  parentEmail     String?
+  status          PreRegistrationStatus @default(PENDING)
+  notes           String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@map("pre_registrations")
+}
