@@ -1,9 +1,26 @@
 import { PrismaClient, UserRole, Gender, GradeType, FeeType, DayOfWeek } from "@prisma/client";
+import { createClient } from "@supabase/supabase-js";
 
 const prisma = new PrismaClient();
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+async function createAuthUser(email: string, password: string): Promise<string> {
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (error) throw new Error(`Failed to create auth user ${email}: ${error.message}`);
+  return data.user.id;
+}
+
 async function main() {
-  console.log("Seeding database...");
+  console.log("Seeding database...\n");
 
   // ==================== Academic Year & Terms ====================
   const year = await prisma.academicYear.create({
@@ -22,22 +39,22 @@ async function main() {
     },
     include: { terms: true },
   });
-  console.log("  Academic year created:", year.name);
+  console.log("  Annee scolaire creee:", year.name);
 
   // ==================== Subjects ====================
   const subjectsData = [
     { name: "Mathematiques", code: "MATH", category: "Sciences" },
     { name: "Francais", code: "FRA", category: "Lettres" },
-    { name: "Anglais", code: "ANG", category: "Lettres" },
+    { name: "Anglais", code: "ANG", category: "Langues" },
     { name: "Physique-Chimie", code: "PC", category: "Sciences" },
     { name: "Sciences de la Vie et de la Terre", code: "SVT", category: "Sciences" },
     { name: "Histoire-Geographie", code: "HG", category: "Sciences Humaines" },
-    { name: "Education Civique", code: "ECM", category: "Sciences Humaines" },
+    { name: "Education Civique et Morale", code: "ECM", category: "Sciences Humaines" },
     { name: "Informatique", code: "INFO", category: "Sciences" },
-    { name: "Education Physique et Sportive", code: "EPS", category: "Autres" },
+    { name: "Education Physique et Sportive", code: "EPS", category: "Arts et Sport" },
     { name: "Philosophie", code: "PHILO", category: "Lettres" },
-    { name: "Espagnol", code: "ESP", category: "Lettres" },
-    { name: "Allemand", code: "ALL", category: "Lettres" },
+    { name: "Espagnol", code: "ESP", category: "Langues" },
+    { name: "Allemand", code: "ALL", category: "Langues" },
   ];
 
   const subjects: Record<string, string> = {};
@@ -45,7 +62,7 @@ async function main() {
     const created = await prisma.subject.create({ data: s });
     subjects[s.code] = created.id;
   }
-  console.log("  Subjects created:", Object.keys(subjects).length);
+  console.log("  Matieres creees:", Object.keys(subjects).length);
 
   // ==================== Classes ====================
   const classesData = [
@@ -58,8 +75,8 @@ async function main() {
     { name: "2nde C", level: "2nde", section: "C" },
     { name: "1ere A", level: "1ere", section: "A" },
     { name: "1ere D", level: "1ere", section: "D" },
-    { name: "Tle A", level: "Terminale", section: "A" },
-    { name: "Tle D", level: "Terminale", section: "D" },
+    { name: "Tle A", level: "Tle", section: "A" },
+    { name: "Tle D", level: "Tle", section: "D" },
   ];
 
   const classes: Record<string, string> = {};
@@ -67,7 +84,7 @@ async function main() {
     const created = await prisma.class.create({ data: c });
     classes[c.name] = created.id;
   }
-  console.log("  Classes created:", Object.keys(classes).length);
+  console.log("  Classes creees:", Object.keys(classes).length);
 
   // ==================== Class Subjects (with coefficients) ====================
   const classSubjectMap: Record<string, { code: string; coeff: number }[]> = {
@@ -98,17 +115,15 @@ async function main() {
       classSubjects[`${className}-${s.code}`] = cs.id;
     }
   }
-  console.log("  Class subjects assigned");
+  console.log("  Matieres de classe assignees");
 
-  // ==================== Users: Admin ====================
-  const adminUser = await prisma.user.create({
-    data: {
-      email: "admin@college-negou.cm",
-      role: UserRole.ADMIN,
-      supabaseId: "admin-seed-supabase-id",
-    },
+  // ==================== Admin ====================
+  console.log("\n  Creation des comptes Supabase Auth...");
+  const adminSupabaseId = await createAuthUser("admin@college-negou.cm", "Admin123!");
+  await prisma.user.create({
+    data: { email: "admin@college-negou.cm", role: UserRole.ADMIN, supabaseId: adminSupabaseId },
   });
-  console.log("  Admin user created:", adminUser.email);
+  console.log("  Admin cree: admin@college-negou.cm / Admin123!");
 
   // ==================== Teachers ====================
   const teachersData = [
@@ -121,8 +136,9 @@ async function main() {
 
   const teachers: Record<string, string> = {};
   for (const t of teachersData) {
+    const supabaseId = await createAuthUser(t.email, "Teacher123!");
     const user = await prisma.user.create({
-      data: { email: t.email, role: UserRole.TEACHER, supabaseId: `teacher-seed-${t.email}` },
+      data: { email: t.email, role: UserRole.TEACHER, supabaseId },
     });
     const teacher = await prisma.teacher.create({
       data: {
@@ -132,7 +148,7 @@ async function main() {
     });
     teachers[t.specialty!] = teacher.id;
   }
-  console.log("  Teachers created:", Object.keys(teachers).length);
+  console.log("  Enseignants crees:", Object.keys(teachers).length, "(mot de passe: Teacher123!)");
 
   // ==================== Teacher Assignments ====================
   const assignmentsMap: { teacher: string; className: string; code: string }[] = [
@@ -155,15 +171,11 @@ async function main() {
     const csKey = `${a.className}-${a.code}`;
     if (classSubjects[csKey] && teachers[a.teacher]) {
       await prisma.teacherAssignment.create({
-        data: {
-          teacherId: teachers[a.teacher],
-          classId: classes[a.className],
-          classSubjectId: classSubjects[csKey],
-        },
+        data: { teacherId: teachers[a.teacher], classId: classes[a.className], classSubjectId: classSubjects[csKey] },
       });
     }
   }
-  console.log("  Teacher assignments created");
+  console.log("  Affectations enseignants creees");
 
   // ==================== Students ====================
   const studentNames = [
@@ -185,8 +197,9 @@ async function main() {
     const matricule = `CPN-2025-${String(i + 1).padStart(4, "0")}`;
     const email = `${s.firstName.toLowerCase()}.${s.lastName.toLowerCase()}@eleve.college-negou.cm`;
 
+    const supabaseId = await createAuthUser(email, "Eleve123!");
     const user = await prisma.user.create({
-      data: { email, role: UserRole.STUDENT, supabaseId: `student-seed-${email}` },
+      data: { email, role: UserRole.STUDENT, supabaseId },
     });
 
     const student = await prisma.student.create({
@@ -203,7 +216,7 @@ async function main() {
       data: { studentId: student.id, classId: classes[className], academicYearId: year.id },
     });
   }
-  console.log("  Students created and enrolled:", studentIds.length);
+  console.log("  Eleves crees et inscrits:", studentIds.length, "(mot de passe: Eleve123!)");
 
   // ==================== Parents ====================
   const parentsData = [
@@ -213,8 +226,9 @@ async function main() {
   ];
 
   for (const pd of parentsData) {
+    const supabaseId = await createAuthUser(pd.email, "Parent123!");
     const user = await prisma.user.create({
-      data: { email: pd.email, role: UserRole.PARENT, supabaseId: `parent-seed-${pd.email}` },
+      data: { email: pd.email, role: UserRole.PARENT, supabaseId },
     });
     const parent = await prisma.parent.create({
       data: { userId: user.id, firstName: pd.firstName, lastName: pd.lastName, phone: pd.phone },
@@ -223,30 +237,44 @@ async function main() {
       data: { parentId: parent.id, studentId: studentIds[pd.childIdx] },
     });
   }
-  console.log("  Parents created: 3");
+  console.log("  Parents crees: 3 (mot de passe: Parent123!)");
 
   // ==================== Sample Grades (1er Trimestre, 6eme A) ====================
   const term1 = year.terms.find((t) => t.sequenceNumber === 1)!;
   const mathTeacherId = teachers["Mathematiques"];
+  const fraTeacherId = teachers["Francais"];
+  const angTeacherId = teachers["Anglais"];
+  const pcTeacherId = teachers["Physique-Chimie"];
+  const hgTeacherId = teachers["Histoire-Geographie"];
 
-  // Give grades to first 8 students (6eme A) in Math
-  const mathCsId = classSubjects["6eme A-MATH"];
-  if (mathCsId && mathTeacherId) {
-    for (let i = 0; i < 8; i++) {
-      const baseGrade = 8 + Math.random() * 10;
-      await prisma.grade.createMany({
-        data: [
-          { studentId: studentIds[i], classSubjectId: mathCsId, termId: term1.id, teacherId: mathTeacherId, type: GradeType.DEVOIR, value: Math.round((baseGrade + Math.random() * 4) * 100) / 100 },
-          { studentId: studentIds[i], classSubjectId: mathCsId, termId: term1.id, teacherId: mathTeacherId, type: GradeType.INTERROGATION, value: Math.round((baseGrade + Math.random() * 3) * 100) / 100 },
-          { studentId: studentIds[i], classSubjectId: mathCsId, termId: term1.id, teacherId: mathTeacherId, type: GradeType.COMPOSITION, value: Math.round((baseGrade + Math.random() * 5) * 100) / 100 },
-        ],
-      });
+  // Grades for all subjects in 6eme A
+  const gradeConfigs = [
+    { csKey: "6eme A-MATH", teacherId: mathTeacherId },
+    { csKey: "6eme A-FRA", teacherId: fraTeacherId },
+    { csKey: "6eme A-ANG", teacherId: angTeacherId },
+    { csKey: "6eme A-PC", teacherId: pcTeacherId },
+    { csKey: "6eme A-HG", teacherId: hgTeacherId },
+  ];
+
+  for (const gc of gradeConfigs) {
+    const csId = classSubjects[gc.csKey];
+    if (csId && gc.teacherId) {
+      for (let i = 0; i < 8; i++) {
+        const baseGrade = 7 + Math.random() * 11;
+        await prisma.grade.createMany({
+          data: [
+            { studentId: studentIds[i], classSubjectId: csId, termId: term1.id, teacherId: gc.teacherId, type: GradeType.DEVOIR, value: Math.round(Math.min(20, baseGrade + Math.random() * 4) * 100) / 100, description: "Devoir n°1" },
+            { studentId: studentIds[i], classSubjectId: csId, termId: term1.id, teacherId: gc.teacherId, type: GradeType.INTERROGATION, value: Math.round(Math.min(20, baseGrade + Math.random() * 3) * 100) / 100, description: "Interrogation n°1" },
+            { studentId: studentIds[i], classSubjectId: csId, termId: term1.id, teacherId: gc.teacherId, type: GradeType.COMPOSITION, value: Math.round(Math.min(20, baseGrade + Math.random() * 5) * 100) / 100, description: "Composition du 1er trimestre" },
+          ],
+        });
+      }
     }
   }
-  console.log("  Sample grades created for Maths 6eme A");
+  console.log("  Notes creees pour 5 matieres en 6eme A");
 
   // ==================== Fee Structures ====================
-  const feeLevels = ["6eme", "5eme", "4eme", "3eme", "2nde", "1ere", "Terminale"];
+  const feeLevels = ["6eme", "5eme", "4eme", "3eme", "2nde", "1ere", "Tle"];
   for (const level of feeLevels) {
     const baseAmount = level === "6eme" || level === "5eme" ? 50000 : level === "4eme" || level === "3eme" ? 65000 : 75000;
     await prisma.feeStructure.createMany({
@@ -260,54 +288,51 @@ async function main() {
       ],
     });
   }
-  console.log("  Fee structures created for all levels");
+  console.log("  Grille tarifaire creee pour tous les niveaux");
 
-  // ==================== Timetable (6eme A, sample) ====================
+  // ==================== Timetable (6eme A) ====================
   const timetableData = [
     { day: DayOfWeek.MONDAY, start: "07:30", end: "08:30", subject: "Mathematiques", teacher: "M. NKOUATCHOU" },
     { day: DayOfWeek.MONDAY, start: "08:30", end: "09:30", subject: "Mathematiques", teacher: "M. NKOUATCHOU" },
-    { day: DayOfWeek.MONDAY, start: "09:45", end: "10:45", subject: "Francais", teacher: "Mme FOUDA" },
-    { day: DayOfWeek.MONDAY, start: "10:45", end: "11:45", subject: "Francais", teacher: "Mme FOUDA" },
+    { day: DayOfWeek.MONDAY, start: "10:00", end: "11:00", subject: "Francais", teacher: "Mme FOUDA" },
+    { day: DayOfWeek.MONDAY, start: "11:00", end: "12:00", subject: "Francais", teacher: "Mme FOUDA" },
     { day: DayOfWeek.MONDAY, start: "12:30", end: "13:30", subject: "Anglais", teacher: "Mme KAMGA" },
     { day: DayOfWeek.TUESDAY, start: "07:30", end: "08:30", subject: "Physique-Chimie", teacher: "M. TAGNE" },
     { day: DayOfWeek.TUESDAY, start: "08:30", end: "09:30", subject: "Physique-Chimie", teacher: "M. TAGNE" },
-    { day: DayOfWeek.TUESDAY, start: "09:45", end: "10:45", subject: "Histoire-Geographie", teacher: "M. MBARGA" },
-    { day: DayOfWeek.TUESDAY, start: "10:45", end: "11:45", subject: "Histoire-Geographie", teacher: "M. MBARGA" },
+    { day: DayOfWeek.TUESDAY, start: "10:00", end: "11:00", subject: "Histoire-Geographie", teacher: "M. MBARGA" },
+    { day: DayOfWeek.TUESDAY, start: "11:00", end: "12:00", subject: "Histoire-Geographie", teacher: "M. MBARGA" },
     { day: DayOfWeek.WEDNESDAY, start: "07:30", end: "08:30", subject: "Anglais", teacher: "Mme KAMGA" },
     { day: DayOfWeek.WEDNESDAY, start: "08:30", end: "09:30", subject: "Mathematiques", teacher: "M. NKOUATCHOU" },
-    { day: DayOfWeek.WEDNESDAY, start: "09:45", end: "10:45", subject: "Francais", teacher: "Mme FOUDA" },
+    { day: DayOfWeek.WEDNESDAY, start: "10:00", end: "11:00", subject: "Francais", teacher: "Mme FOUDA" },
     { day: DayOfWeek.THURSDAY, start: "07:30", end: "09:30", subject: "EPS", teacher: "M. KOUAM" },
-    { day: DayOfWeek.THURSDAY, start: "09:45", end: "10:45", subject: "Informatique", teacher: "M. TAGNE" },
-    { day: DayOfWeek.THURSDAY, start: "10:45", end: "11:45", subject: "Education Civique", teacher: "M. MBARGA" },
+    { day: DayOfWeek.THURSDAY, start: "10:00", end: "11:00", subject: "Informatique", teacher: "M. TAGNE" },
+    { day: DayOfWeek.THURSDAY, start: "11:00", end: "12:00", subject: "Education Civique et Morale", teacher: "M. MBARGA" },
     { day: DayOfWeek.FRIDAY, start: "07:30", end: "08:30", subject: "SVT", teacher: "M. TAGNE" },
     { day: DayOfWeek.FRIDAY, start: "08:30", end: "09:30", subject: "SVT", teacher: "M. TAGNE" },
-    { day: DayOfWeek.FRIDAY, start: "09:45", end: "10:45", subject: "Mathematiques", teacher: "M. NKOUATCHOU" },
-    { day: DayOfWeek.FRIDAY, start: "10:45", end: "11:45", subject: "Francais", teacher: "Mme FOUDA" },
+    { day: DayOfWeek.FRIDAY, start: "10:00", end: "11:00", subject: "Mathematiques", teacher: "M. NKOUATCHOU" },
+    { day: DayOfWeek.FRIDAY, start: "11:00", end: "12:00", subject: "Francais", teacher: "Mme FOUDA" },
   ];
 
   for (const slot of timetableData) {
     await prisma.timetableSlot.create({
       data: {
-        classId: classes["6eme A"],
-        subjectName: slot.subject,
-        teacherName: slot.teacher,
-        dayOfWeek: slot.day,
-        startTime: slot.start,
-        endTime: slot.end,
+        classId: classes["6eme A"], subjectName: slot.subject,
+        teacherName: slot.teacher, dayOfWeek: slot.day, startTime: slot.start, endTime: slot.end,
       },
     });
   }
-  console.log("  Timetable created for 6eme A");
+  console.log("  Emploi du temps cree pour 6eme A");
 
   // ==================== Announcements ====================
   await prisma.announcement.createMany({
     data: [
-      { title: "Rentree scolaire 2025-2026", content: "La rentree scolaire est fixee au 2 septembre 2025. Tous les eleves sont attendus a 7h30 pour la ceremonie d'ouverture." },
+      { title: "Rentree scolaire 2025-2026", content: "La rentree scolaire est fixee au 2 septembre 2025. Tous les eleves sont attendus a 7h30 pour la ceremonie d'ouverture. Tenue de classe obligatoire." },
       { title: "Conseil de classe du 1er trimestre", content: "Les conseils de classe du premier trimestre se tiendront du 16 au 20 decembre 2025. Les parents delegues sont invites a y participer.", targetRole: UserRole.PARENT },
       { title: "Competitions inter-classes", content: "Les competitions sportives inter-classes debuteront le 15 janvier 2026. Inscrivez-vous aupres de votre professeur d'EPS.", targetRole: UserRole.STUDENT },
+      { title: "Reunion pedagogique", content: "Une reunion pedagogique est prevue le samedi 10 janvier 2026 a 8h00 dans la salle des professeurs. Presence obligatoire de tous les enseignants.", targetRole: UserRole.TEACHER },
     ],
   });
-  console.log("  Announcements created");
+  console.log("  Annonces creees");
 
   // ==================== Events ====================
   await prisma.event.createMany({
@@ -317,7 +342,7 @@ async function main() {
       { title: "Remise des prix d'excellence", description: "Ceremonie de remise des prix aux meilleurs eleves de l'annee scolaire 2025-2026.", date: new Date("2026-06-28"), location: "Salle des fetes" },
     ],
   });
-  console.log("  Events created");
+  console.log("  Evenements crees");
 
   // ==================== News Articles ====================
   await prisma.newsArticle.createMany({
@@ -325,7 +350,7 @@ async function main() {
       {
         title: "Resultats exceptionnels au BEPC 2025",
         slug: "resultats-bepc-2025",
-        content: "Le College Polyvalent Negou est fier d'annoncer un taux de reussite de 92% au BEPC session 2025. Felicitations a tous nos eleves et enseignants pour ce resultat remarquable.",
+        content: "Le College Polyvalent Negou est fier d'annoncer un taux de reussite de 92% au BEPC session 2025. Felicitations a tous nos eleves et enseignants pour ce resultat remarquable qui place notre etablissement parmi les meilleurs de la region de l'Ouest.",
         excerpt: "92% de reussite au BEPC 2025 - un record pour notre etablissement.",
       },
       {
@@ -342,16 +367,28 @@ async function main() {
       },
     ],
   });
-  console.log("  News articles created");
+  console.log("  Articles d'actualite crees");
 
-  console.log("\nSeed completed successfully!");
-  console.log("Accounts created:");
-  console.log("  Admin: admin@college-negou.cm");
-  console.log("  Teachers: j.nkouatchou@, m.fouda@, p.tagne@, t.kamga@, s.mbarga@ @college-negou.cm");
-  console.log("  Students: aline.tchinda@, boris.djomo@, ... @eleve.college-negou.cm");
-  console.log("  Parents: p.tchinda@, p.djomo@, j.ngoufack@ @gmail.com");
-  console.log("\nNote: These seed users have placeholder supabaseIds.");
-  console.log("For real auth, create users in Supabase Auth first, then update supabaseId.");
+  // ==================== Pre-registration samples ====================
+  await prisma.preRegistration.createMany({
+    data: [
+      { firstName: "Alain", lastName: "NZEUGANG", dateOfBirth: new Date("2013-06-10"), gender: Gender.MALE, placeOfBirth: "Bafoussam", desiredLevel: "6eme", parentName: "Robert NZEUGANG", parentPhone: "677889900", parentEmail: "r.nzeugang@gmail.com" },
+      { firstName: "Sandrine", lastName: "KENFACK", dateOfBirth: new Date("2013-02-20"), gender: Gender.FEMALE, placeOfBirth: "Dschang", desiredLevel: "6eme", parentName: "Celestin KENFACK", parentPhone: "699001122", previousSchool: "Ecole Primaire de Dschang" },
+    ],
+  });
+  console.log("  Pre-inscriptions creees");
+
+  console.log("\n========================================");
+  console.log("  SEED TERMINE AVEC SUCCES !");
+  console.log("========================================");
+  console.log("\nComptes de connexion :");
+  console.log("  ADMIN:       admin@college-negou.cm          / Admin123!");
+  console.log("  ENSEIGNANT:  j.nkouatchou@college-negou.cm   / Teacher123!");
+  console.log("  ELEVE:       aline.tchinda@eleve.college-negou.cm / Eleve123!");
+  console.log("  PARENT:      p.tchinda@gmail.com             / Parent123!");
+  console.log("\nTous les enseignants: Teacher123!");
+  console.log("Tous les eleves: Eleve123!");
+  console.log("Tous les parents: Parent123!");
 }
 
 main()

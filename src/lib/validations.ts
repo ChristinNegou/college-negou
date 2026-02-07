@@ -134,6 +134,50 @@ export const timetableSlotSchema = z.object({
   room: z.string().optional(),
 });
 
+// --- News Article ---
+export const newsArticleSchema = z.object({
+  title: z.string().min(3, "Le titre doit contenir au moins 3 caracteres"),
+  content: z.string().min(10, "Le contenu doit contenir au moins 10 caracteres"),
+  excerpt: z.string().optional(),
+  imageUrl: z.string().url("L'URL de l'image est invalide").optional().or(z.literal("")),
+});
+
+// --- Event ---
+export const eventSchema = z.object({
+  title: z.string().min(3, "Le titre doit contenir au moins 3 caracteres"),
+  description: z.string().min(10, "La description doit contenir au moins 10 caracteres"),
+  date: z.string().min(1, "La date est requise"),
+  endDate: z.string().optional(),
+  location: z.string().optional(),
+  imageUrl: z.string().url("L'URL de l'image est invalide").optional().or(z.literal("")),
+});
+
+// --- Gallery Album ---
+export const galleryAlbumSchema = z.object({
+  title: z.string().min(2, "Le titre doit contenir au moins 2 caracteres"),
+  description: z.string().optional(),
+  coverUrl: z.string().url("L'URL de couverture est invalide").optional().or(z.literal("")),
+});
+
+// --- Gallery Photo ---
+export const galleryPhotoSchema = z.object({
+  albumId: z.string().min(1, "L'album est requis"),
+  url: z.string().url("L'URL de la photo est invalide"),
+  caption: z.string().optional(),
+});
+
+// --- Parent ---
+export const parentSchema = z.object({
+  firstName: z.string().min(2, "Le prenom doit contenir au moins 2 caracteres"),
+  lastName: z.string().min(2, "Le nom doit contenir au moins 2 caracteres"),
+  email: z.string().email("L'adresse email est invalide"),
+  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caracteres"),
+  phone: z.string().min(8, "Le telephone doit contenir au moins 8 caracteres"),
+  profession: z.string().optional(),
+  address: z.string().optional(),
+  studentIds: z.array(z.string()).optional(),
+});
+
 // --- Pre-Registration ---
 export const preRegistrationSchema = z.object({
   firstName: z.string().min(2, "Le prenom doit contenir au moins 2 caracteres"),
