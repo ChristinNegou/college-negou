@@ -492,6 +492,25 @@ model GalleryPhoto {
   @@map("gallery_photos")
 }
 
+// ==================== SITE IMAGES ====================
+
+model SiteImage {
+  id          String   @id @default(uuid())
+  section     String   // HERO, ABOUT, PROGRAMS, CTA, GALLERY_PREVIEW
+  page        String   @default("HOME") // HOME, ABOUT
+  url         String
+  alt         String?
+  title       String?
+  description String?
+  size        String   @default("MEDIUM") // SMALL, MEDIUM, LARGE, FULL
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("site_images")
+}
+
 // ==================== PRE-REGISTRATION ====================
 
 model PreRegistration {

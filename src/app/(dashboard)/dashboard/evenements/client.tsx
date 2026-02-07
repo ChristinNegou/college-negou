@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { createEvent, deleteEvent, toggleEventPublished } from "@/actions/event.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Eye, EyeOff, MapPin, Calendar } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff, MapPin, Calendar, Upload, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 
 type EventData = {
@@ -19,17 +19,46 @@ type EventData = {
   date: string;
   endDate: string | null;
   location: string | null;
+  imageUrl: string | null;
   isPublished: boolean;
 };
 
 export function EventsClient({ events }: { events: EventData[] }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [imgMode, setImgMode] = useState<"file" | "url" | "none">("none");
+  const [preview, setPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setPreview(file ? URL.createObjectURL(file) : null);
+  }
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     const form = new FormData(e.currentTarget);
+
+    let imageUrl: string | undefined;
+
+    if (imgMode === "file") {
+      const file = fileRef.current?.files?.[0];
+      if (file) {
+        const uploadData = new FormData();
+        uploadData.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: uploadData });
+        const json = await res.json();
+        if (!res.ok) {
+          toast.error(json.error || "Erreur lors de l'upload");
+          setLoading(false);
+          return;
+        }
+        imageUrl = json.url;
+      }
+    } else if (imgMode === "url") {
+      imageUrl = (form.get("imageUrl") as string) || undefined;
+    }
 
     const result = await createEvent({
       title: form.get("title") as string,
@@ -37,6 +66,7 @@ export function EventsClient({ events }: { events: EventData[] }) {
       date: form.get("date") as string,
       endDate: (form.get("endDate") as string) || undefined,
       location: (form.get("location") as string) || undefined,
+      imageUrl,
     });
 
     if ("error" in result) {
@@ -44,17 +74,19 @@ export function EventsClient({ events }: { events: EventData[] }) {
     } else {
       toast.success("Evenement cree");
       setOpen(false);
+      setPreview(null);
+      setImgMode("none");
     }
     setLoading(false);
   }
 
   return (
     <div className="space-y-4">
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPreview(null); setImgMode("none"); } }}>
         <DialogTrigger asChild>
           <Button><Plus className="mr-2 h-4 w-4" />Nouvel evenement</Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Nouvel evenement</DialogTitle></DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-2">
@@ -79,6 +111,44 @@ export function EventsClient({ events }: { events: EventData[] }) {
               <Label>Lieu (optionnel)</Label>
               <Input name="location" placeholder="Ex: Salle polyvalente" />
             </div>
+
+            {/* Image section */}
+            <div className="space-y-2">
+              <Label>Image (optionnel)</Label>
+              <div className="flex gap-2">
+                <Button type="button" variant={imgMode === "file" ? "default" : "outline"} size="sm"
+                  onClick={() => { setImgMode("file"); setPreview(null); }}>
+                  <Upload className="mr-2 h-4 w-4" />Fichier
+                </Button>
+                <Button type="button" variant={imgMode === "url" ? "default" : "outline"} size="sm"
+                  onClick={() => { setImgMode("url"); setPreview(null); }}>
+                  <LinkIcon className="mr-2 h-4 w-4" />URL
+                </Button>
+                {imgMode !== "none" && (
+                  <Button type="button" variant="ghost" size="sm"
+                    onClick={() => { setImgMode("none"); setPreview(null); }}>
+                    Aucune
+                  </Button>
+                )}
+              </div>
+              {imgMode === "file" && (
+                <div>
+                  <Input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleFileChange} className="cursor-pointer" />
+                  <p className="mt-1 text-xs text-muted-foreground">JPG, PNG, WebP ou GIF. Max 5 Mo.</p>
+                  {preview && (
+                    <div className="mt-2 overflow-hidden rounded-lg border">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={preview} alt="Apercu" className="max-h-40 w-full object-contain" />
+                    </div>
+                  )}
+                </div>
+              )}
+              {imgMode === "url" && (
+                <Input name="imageUrl" type="url" placeholder="https://..." />
+              )}
+            </div>
+
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creation..." : "Creer l'evenement"}
             </Button>
@@ -90,7 +160,13 @@ export function EventsClient({ events }: { events: EventData[] }) {
         {events.map((ev) => {
           const isPast = new Date(ev.date) < new Date();
           return (
-            <Card key={ev.id}>
+            <Card key={ev.id} className="overflow-hidden">
+              {ev.imageUrl && (
+                <div className="h-32 w-full overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={ev.imageUrl} alt={ev.title} className="h-full w-full object-cover" />
+                </div>
+              )}
               <CardHeader className="flex flex-row items-start justify-between">
                 <div>
                   <CardTitle className="text-lg">{ev.title}</CardTitle>

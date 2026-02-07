@@ -134,12 +134,25 @@ export const timetableSlotSchema = z.object({
   room: z.string().optional(),
 });
 
+// Helper: accepts both URLs (https://...) and local paths (/uploads/...)
+const imageUrlField = z.string().min(1, "L'URL ou le chemin de l'image est requis")
+  .refine((v) => v.startsWith("/") || v.startsWith("http://") || v.startsWith("https://"), {
+    message: "L'image doit etre une URL ou un chemin local (/uploads/...)",
+  });
+
+const optionalImageUrlField = z.string()
+  .refine((v) => v === "" || v.startsWith("/") || v.startsWith("http://") || v.startsWith("https://"), {
+    message: "L'image doit etre une URL ou un chemin local (/uploads/...)",
+  })
+  .optional()
+  .or(z.literal(""));
+
 // --- News Article ---
 export const newsArticleSchema = z.object({
   title: z.string().min(3, "Le titre doit contenir au moins 3 caracteres"),
   content: z.string().min(10, "Le contenu doit contenir au moins 10 caracteres"),
   excerpt: z.string().optional(),
-  imageUrl: z.string().url("L'URL de l'image est invalide").optional().or(z.literal("")),
+  imageUrl: optionalImageUrlField,
 });
 
 // --- Event ---
@@ -149,20 +162,20 @@ export const eventSchema = z.object({
   date: z.string().min(1, "La date est requise"),
   endDate: z.string().optional(),
   location: z.string().optional(),
-  imageUrl: z.string().url("L'URL de l'image est invalide").optional().or(z.literal("")),
+  imageUrl: optionalImageUrlField,
 });
 
 // --- Gallery Album ---
 export const galleryAlbumSchema = z.object({
   title: z.string().min(2, "Le titre doit contenir au moins 2 caracteres"),
   description: z.string().optional(),
-  coverUrl: z.string().url("L'URL de couverture est invalide").optional().or(z.literal("")),
+  coverUrl: optionalImageUrlField,
 });
 
 // --- Gallery Photo ---
 export const galleryPhotoSchema = z.object({
   albumId: z.string().min(1, "L'album est requis"),
-  url: z.string().url("L'URL de la photo est invalide"),
+  url: imageUrlField,
   caption: z.string().optional(),
 });
 
@@ -176,6 +189,18 @@ export const parentSchema = z.object({
   profession: z.string().optional(),
   address: z.string().optional(),
   studentIds: z.array(z.string()).optional(),
+});
+
+// --- Site Image ---
+export const siteImageSchema = z.object({
+  section: z.string().min(1, "La section est requise"),
+  page: z.string().min(1, "La page est requise"),
+  url: z.string().min(1, "L'URL de l'image est requise"),
+  alt: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  size: z.enum(["SMALL", "MEDIUM", "LARGE", "FULL"], { message: "La taille est invalide" }),
+  sortOrder: z.number().int().min(0).optional(),
 });
 
 // --- Pre-Registration ---

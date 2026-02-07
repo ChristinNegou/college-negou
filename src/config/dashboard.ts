@@ -58,6 +58,7 @@ const adminNav: NavSection[] = [
       { title: "Actualites", href: "/dashboard/actualites", icon: "Newspaper" },
       { title: "Evenements", href: "/dashboard/evenements", icon: "CalendarDays" },
       { title: "Galerie", href: "/dashboard/galerie", icon: "Image" },
+      { title: "Images du site", href: "/dashboard/images-site", icon: "ImagePlus" },
       { title: "Preinscriptions", href: "/dashboard/preinscriptions", icon: "UserPlus" },
     ],
   },

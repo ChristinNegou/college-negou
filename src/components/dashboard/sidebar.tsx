@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Megaphone, Calendar, School, BookOpen, Clock,
   Users, GraduationCap, UserCheck, ClipboardList, FileText, FileBarChart,
-  Banknote, CreditCard, Newspaper, CalendarDays, Image, UserPlus,
+  Banknote, CreditCard, Newspaper, CalendarDays, Image, ImagePlus, UserPlus,
   PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ import { SCHOOL_SHORT_NAME } from "@/config/cameroon-education";
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, Megaphone, Calendar, School, BookOpen, Clock,
   Users, GraduationCap, UserCheck, ClipboardList, FileText, FileBarChart,
-  Banknote, CreditCard, Newspaper, CalendarDays, Image, UserPlus,
+  Banknote, CreditCard, Newspaper, CalendarDays, Image, ImagePlus, UserPlus,
   PenLine,
 };
 

@@ -4,7 +4,14 @@ import { MapPin, Phone, Mail } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="border-t bg-muted/50">
+    <footer className="relative border-t bg-muted/50">
+      {/* SVG Wave separator */}
+      <div className="absolute -top-6 left-0 w-full overflow-hidden leading-none">
+        <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="relative block h-6 w-full">
+          <path d="M0,30 C200,60 400,0 600,30 C800,60 1000,0 1200,30 L1200,60 L0,60 Z" className="fill-muted/50" />
+        </svg>
+      </div>
+
       <div className="container mx-auto px-4 py-12">
         <div className="grid gap-8 md:grid-cols-4">
           <div className="space-y-4">
@@ -20,20 +27,44 @@ export function Footer() {
           <div>
             <h3 className="mb-4 font-semibold">Liens rapides</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/a-propos" className="text-muted-foreground hover:text-foreground">A Propos</Link></li>
-              <li><Link href="/programmes" className="text-muted-foreground hover:text-foreground">Programmes</Link></li>
-              <li><Link href="/admissions" className="text-muted-foreground hover:text-foreground">Admissions</Link></li>
-              <li><Link href="/galerie" className="text-muted-foreground hover:text-foreground">Galerie</Link></li>
+              {[
+                { href: "/a-propos", label: "A Propos" },
+                { href: "/programmes", label: "Programmes" },
+                { href: "/admissions", label: "Admissions" },
+                { href: "/galerie", label: "Galerie" },
+              ].map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="group relative inline-block text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {link.label}
+                    <span className="absolute -bottom-0.5 left-0 h-px w-0 bg-primary transition-all duration-300 group-hover:w-full" />
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
           <div>
             <h3 className="mb-4 font-semibold">Portails</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/connexion" className="text-muted-foreground hover:text-foreground">Connexion</Link></li>
-              <li><Link href="/actualites" className="text-muted-foreground hover:text-foreground">Actualites</Link></li>
-              <li><Link href="/evenements" className="text-muted-foreground hover:text-foreground">Evenements</Link></li>
-              <li><Link href="/contact" className="text-muted-foreground hover:text-foreground">Contact</Link></li>
+              {[
+                { href: "/connexion", label: "Connexion" },
+                { href: "/actualites", label: "Actualites" },
+                { href: "/evenements", label: "Evenements" },
+                { href: "/contact", label: "Contact" },
+              ].map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="group relative inline-block text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {link.label}
+                    <span className="absolute -bottom-0.5 left-0 h-px w-0 bg-primary transition-all duration-300 group-hover:w-full" />
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

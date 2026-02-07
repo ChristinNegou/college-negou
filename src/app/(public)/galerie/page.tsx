@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SCHOOL_NAME } from "@/config/cameroon-education";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, Search } from "lucide-react";
+import { ScrollReveal } from "@/components/ui/scroll-reveal";
 
 export const metadata = {
   title: `Galerie - ${SCHOOL_NAME}`,
@@ -17,38 +17,53 @@ export default async function GaleriePage() {
 
   return (
     <div>
-      <section className="bg-gradient-to-r from-primary/10 to-accent/10 py-16">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="mb-4 text-4xl font-bold">Galerie Photos</h1>
-          <p className="text-lg text-muted-foreground">Decouvrez la vie au college en images</p>
+      {/* Header */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-accent/5 to-primary/10 py-20">
+        <div className="absolute inset-0 pattern-dots opacity-30" />
+        <div className="container relative mx-auto px-4 text-center">
+          <h1 className="mb-4 text-4xl font-bold animate-fade-in-up">
+            Galerie <span className="gradient-text">Photos</span>
+          </h1>
+          <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-gradient-to-r from-primary to-accent animate-fade-in-up" style={{ animationDelay: "0.15s" }} />
+          <p className="text-lg text-muted-foreground animate-fade-in-up" style={{ animationDelay: "0.3s" }}>Decouvrez la vie au college en images</p>
         </div>
       </section>
 
       <section className="py-16">
         <div className="container mx-auto px-4">
           {albums.length > 0 ? (
-            <div className="space-y-12">
+            <div className="space-y-16">
               {albums.map((album) => (
                 <div key={album.id}>
-                  <h2 className="mb-4 text-2xl font-bold">{album.title}</h2>
-                  {album.description && (
-                    <p className="mb-6 text-muted-foreground">{album.description}</p>
-                  )}
+                  <ScrollReveal>
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold">
+                        <span className="gradient-text">{album.title}</span>
+                      </h2>
+                      {album.description && (
+                        <p className="mt-2 text-muted-foreground">{album.description}</p>
+                      )}
+                      <div className="mt-3 h-0.5 w-12 rounded-full bg-gradient-to-r from-primary to-accent" />
+                    </div>
+                  </ScrollReveal>
                   <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {album.photos.map((photo) => (
-                      <Card key={photo.id} className="overflow-hidden">
-                        <CardContent className="p-0">
+                    {album.photos.map((photo, i) => (
+                      <ScrollReveal key={photo.id} delay={i * 60}>
+                        <div className="group relative overflow-hidden rounded-xl shadow-sm transition-shadow duration-300 hover:shadow-xl">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={photo.url}
                             alt={photo.caption || album.title}
-                            className="aspect-square w-full object-cover"
+                            className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-110"
                           />
-                          {photo.caption && (
-                            <p className="p-2 text-xs text-muted-foreground">{photo.caption}</p>
-                          )}
-                        </CardContent>
-                      </Card>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                            <Search className="mb-2 h-8 w-8 text-white" />
+                            {photo.caption && (
+                              <p className="px-3 text-center text-sm text-white">{photo.caption}</p>
+                            )}
+                          </div>
+                        </div>
+                      </ScrollReveal>
                     ))}
                   </div>
                 </div>
